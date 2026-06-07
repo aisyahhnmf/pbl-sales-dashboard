@@ -1,12 +1,12 @@
 """
 utils/api_client.py
 Komunikasi ke FastAPI backend.
-Base URL: http://localhost:8000
 """
 
 import requests
 import streamlit as st
 import os
+from urllib.parse import quote
 
 API_BASE = os.getenv("API_BASE_URL", "https://pbl-sales-dashboard-production.up.railway.app")
 VALID_CATEGORIES = ["Furniture", "Office Supplies", "Technology"]
@@ -71,9 +71,10 @@ def predict_sales_next(category: str) -> dict:
 
 @st.cache_data(ttl=300)
 def fetch_forecast(category: str) -> dict:
-    # Encode spasi → %20 otomatis oleh requests
+    # Encode spasi dan karakter khusus di path URL
+    cat_encoded = quote(category, safe="")
     r = requests.get(
-        f"{API_BASE}/predict/forecast/{category}",
+        f"{API_BASE}/predict/forecast/{cat_encoded}",
         timeout=30
     )
     r.raise_for_status()
@@ -82,6 +83,7 @@ def fetch_forecast(category: str) -> dict:
 
 @st.cache_data(ttl=300)
 def fetch_metrics(category: str) -> dict:
-    r = requests.get(f"{API_BASE}/predict/metrics/{category}", timeout=10)
+    cat_encoded = quote(category, safe="")
+    r = requests.get(f"{API_BASE}/predict/metrics/{cat_encoded}", timeout=10)
     r.raise_for_status()
     return r.json()

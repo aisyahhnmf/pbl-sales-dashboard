@@ -52,120 +52,54 @@ def get_theme() -> dict:
 
 # ── Floating dark/light toggle ────────────────────────────────────────────
 def render_toggle():
-    """Render floating sun/moon FAB di pojok kanan atas — satu titik saja."""
+    """Toggle dark/light mode — st.button di kanan atas + CSS tooltip kontras."""
     dm   = st.session_state.get("dark_mode", False)
     icon = "🌙" if dm else "☀️"
-    tip  = "Ganti ke Light Mode" if dm else "Ganti ke Dark Mode"
+    label = "☀️" if dm else "🌙"
 
-    # CSS: sembunyikan st.button sepenuhnya, hanya FAB HTML yang tampil
+    # CSS: tooltip selalu kontras, button styling
     st.markdown(f"""
     <style>
-    /* Sembunyikan semua wrapper st.button yang punya key dm_fab_btn */
-    div[data-testid="stMainBlockContainer"] div[data-testid="stVerticalBlock"]
-      > div[data-testid="stVerticalBlock"]:first-child {{
-        position: absolute !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-        height: 0 !important;
-        overflow: hidden !important;
+    /* Tooltip bawaan Streamlit — paksa kontras di kedua mode */
+    div[data-testid="stTooltipHoverTarget"] + div,
+    [data-testid="stTooltipContent"],
+    div[role="tooltip"] {{
+        background: {"#1E2130" if dm else "#1F2937"} !important;
+        color: #F1F5F9 !important;
+        border: 1px solid {"#3D4265" if dm else "#374151"} !important;
+        border-radius: 6px !important;
+        font-size: 0.75rem !important;
     }}
-    /* Sembunyikan via key attr */
-    button[kind="secondary"][data-testid="baseButton-secondary"] {{
-        /* intentionally not hiding all — only via wrapper above */
+    div[role="tooltip"] p {{
+        color: #F1F5F9 !important;
     }}
-    .dm-fab {{
-        position: fixed !important;
-        top: 14px !important;
-        right: 18px !important;
-        z-index: 99999 !important;
-        background: {"#1E2130" if dm else "#FFFFFF"} !important;
+    /* Button toggle — ukuran compact */
+    div[data-testid="stColumns"] > div:last-child .stButton > button {{
+        background: {"#252839" if dm else "#F1F5F9"} !important;
+        color: {"#F1F5F9" if dm else "#0F172A"} !important;
         border: 1px solid {"#3D4265" if dm else "#E2E8F0"} !important;
-        border-radius: 50% !important;
-        width: 42px !important; height: 42px !important;
-        display: flex !important; align-items: center !important;
-        justify-content: center !important;
-        cursor: pointer !important;
-        box-shadow: 0 2px 10px rgba(0,0,0,{"0.5" if dm else "0.12"}) !important;
-        transition: transform 0.2s, box-shadow 0.2s !important;
-        font-size: 1.15rem !important;
-        user-select: none !important;
+        border-radius: 20px !important;
+        padding: 0.3rem 0.75rem !important;
+        font-size: 0.8rem !important;
+        width: auto !important;
+        white-space: nowrap !important;
     }}
-    .dm-fab:hover {{
-        transform: scale(1.12) !important;
-        box-shadow: 0 4px 16px rgba(99,102,241,0.35) !important;
-    }}
-    /* Tooltip custom — kontras di kedua mode */
-    .dm-fab::after {{
-        content: "{tip}";
-        position: absolute;
-        right: 52px;
-        top: 50%;
-        transform: translateY(-50%);
-        background: {"#1E2130" if dm else "#1F2937"};
-        color: {"#F1F5F9" if dm else "#F9FAFB"};
-        font-size: 0.72rem;
-        font-family: 'DM Sans', sans-serif;
-        white-space: nowrap;
-        padding: 4px 10px;
-        border-radius: 6px;
-        pointer-events: none;
-        opacity: 0;
-        transition: opacity 0.15s;
-    }}
-    .dm-fab:hover::after {{
-        opacity: 1;
+    div[data-testid="stColumns"] > div:last-child .stButton > button:hover {{
+        background: {"#2D3148" if dm else "#E2E8F0"} !important;
+        transform: none !important;
+        box-shadow: none !important;
     }}
     </style>
     """, unsafe_allow_html=True)
 
-    # st.button tersembunyi — hanya untuk menangkap klik dari JS
-    clicked = st.button(icon, key="dm_fab_btn")
-    # Sembunyikan hanya wrapper button toggle di main content, jangan sentuh sidebar
-    st.markdown(f"""
-    <style>
-    /* Sembunyikan st.button toggle tanpa merusak sidebar/nav */
-    section.main div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"]:has(
-        button[kind="secondary"]
-    ) {{
-        height: 0 !important;
-        overflow: hidden !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }}
-    /* Pastikan tombol collapse sidebar tetap berfungsi */
-    [data-testid="collapsedControl"],
-    [data-testid="stSidebarCollapseButton"],
-    button[aria-label="Close sidebar"],
-    button[aria-label="Open sidebar"] {{
-        display: flex !important;
-        visibility: visible !important;
-        height: auto !important;
-        overflow: visible !important;
-    }}
-    </style>
-    """, unsafe_allow_html=True)
-
-    # FAB yang terlihat — klik trigger st.button via JS
-    st.markdown(f"""
-    <div class="dm-fab" onclick="
-        (function(){{
-            const allBtns = window.parent.document.querySelectorAll('button');
-            for(const b of allBtns){{
-                if(b.innerText.trim()==='{icon}'){{
-                    b.click();
-                    return;
-                }}
-            }}
-        }})();
-    ">{icon}</div>
-    """, unsafe_allow_html=True)
-
+    col1, col2 = st.columns([10, 1])
+    with col2:
+        clicked = st.button(label, key="dm_fab_btn")
     if clicked:
         st.session_state.dark_mode = not dm
         st.rerun()
 
 
-# ── Global CSS injector ───────────────────────────────────────────────────
 def inject_global_css():
     t = get_theme()
     dm = t["dm"]
@@ -324,7 +258,7 @@ code {{
     transform: translateY(-1px) !important;
     box-shadow: 0 4px 12px rgba(99,102,241,0.35) !important;
 }}
-/* FAB button — override */
+
 button[title*="Mode"] {{
     all: unset !important;
 }}
