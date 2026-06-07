@@ -1,13 +1,13 @@
 """
 utils/api_client.py
 Komunikasi ke FastAPI backend.
-Base URL: http://localhost:8000
+Base URL: "https://[railway-url].up.railway.app"
 """
 
 import requests
 import streamlit as st
 
-API_BASE = "http://localhost:8000"
+API_BASE = "https://[railway-url].up.railway.app"
 VALID_CATEGORIES = ["Furniture", "Office Supplies", "Technology"]
 
 
