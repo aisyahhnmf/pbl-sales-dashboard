@@ -1,13 +1,14 @@
 """
 utils/api_client.py
 Komunikasi ke FastAPI backend.
-Base URL: "https://[railway-url].up.railway.app"
+Base URL: http://localhost:8000
 """
 
 import requests
 import streamlit as st
+import os
 
-API_BASE = "https://[railway-url].up.railway.app"
+API_BASE = os.getenv("API_BASE_URL", "https://pbl-sales-dashboard-production.up.railway.app")
 VALID_CATEGORIES = ["Furniture", "Office Supplies", "Technology"]
 
 
