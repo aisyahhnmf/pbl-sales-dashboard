@@ -52,50 +52,111 @@ def get_theme() -> dict:
 
 # ── Floating dark/light toggle ────────────────────────────────────────────
 def render_toggle():
-    """Render floating sun/moon button di pojok kanan atas."""
+    """Render floating sun/moon FAB di pojok kanan atas — satu titik saja."""
     dm   = st.session_state.get("dark_mode", False)
     icon = "🌙" if dm else "☀️"
-    tip  = "Switch to Light Mode" if dm else "Switch to Dark Mode"
+    tip  = "Ganti ke Light Mode" if dm else "Ganti ke Dark Mode"
 
+    # CSS: sembunyikan st.button sepenuhnya, hanya FAB HTML yang tampil
     st.markdown(f"""
     <style>
-    div[data-testid="stVerticalBlock"]:has(> div > button#dm_toggle_btn) {{display:none;}}
+    /* Sembunyikan semua wrapper st.button yang punya key dm_fab_btn */
+    div[data-testid="stMainBlockContainer"] div[data-testid="stVerticalBlock"]
+      > div[data-testid="stVerticalBlock"]:first-child {{
+        position: absolute !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        height: 0 !important;
+        overflow: hidden !important;
+    }}
+    /* Sembunyikan via key attr */
+    button[kind="secondary"][data-testid="baseButton-secondary"] {{
+        /* intentionally not hiding all — only via wrapper above */
+    }}
     .dm-fab {{
-        position: fixed;
-        top: 14px;
-        right: 18px;
-        z-index: 9999;
-        background: {"#1A1D27" if dm else "#FFFFFF"};
-        border: 1px solid {"#2D3148" if dm else "#E2E8F0"};
-        border-radius: 50%;
-        width: 40px; height: 40px;
-        display: flex; align-items: center; justify-content: center;
-        cursor: pointer;
-        box-shadow: 0 2px 8px rgba(0,0,0,{"0.4" if dm else "0.1"});
-        transition: all 0.2s;
-        font-size: 1.1rem;
-        text-decoration: none;
+        position: fixed !important;
+        top: 14px !important;
+        right: 18px !important;
+        z-index: 99999 !important;
+        background: {"#1E2130" if dm else "#FFFFFF"} !important;
+        border: 1px solid {"#3D4265" if dm else "#E2E8F0"} !important;
+        border-radius: 50% !important;
+        width: 42px !important; height: 42px !important;
+        display: flex !important; align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        box-shadow: 0 2px 10px rgba(0,0,0,{"0.5" if dm else "0.12"}) !important;
+        transition: transform 0.2s, box-shadow 0.2s !important;
+        font-size: 1.15rem !important;
+        user-select: none !important;
     }}
     .dm-fab:hover {{
-        transform: scale(1.1);
-        box-shadow: 0 4px 14px rgba(99,102,241,0.3);
+        transform: scale(1.12) !important;
+        box-shadow: 0 4px 16px rgba(99,102,241,0.35) !important;
+    }}
+    /* Tooltip custom — kontras di kedua mode */
+    .dm-fab::after {{
+        content: "{tip}";
+        position: absolute;
+        right: 52px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: {"#1E2130" if dm else "#1F2937"};
+        color: {"#F1F5F9" if dm else "#F9FAFB"};
+        font-size: 0.72rem;
+        font-family: 'DM Sans', sans-serif;
+        white-space: nowrap;
+        padding: 4px 10px;
+        border-radius: 6px;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s;
+    }}
+    .dm-fab:hover::after {{
+        opacity: 1;
     }}
     </style>
     """, unsafe_allow_html=True)
 
-    # Pakai st.button tersembunyi, dipicu via JS click proxy
-    col_hidden = st.columns([1])[0]
-    with col_hidden:
-        clicked = st.button(icon, key="dm_fab_btn", help=tip,
-                            use_container_width=False)
-
-    # FAB HTML yang visible — klik akan trigger button Streamlit di atas via JS
+    # st.button tersembunyi — hanya untuk menangkap klik dari JS
+    clicked = st.button(icon, key="dm_fab_btn")
+    # Sembunyikan hanya wrapper button toggle di main content, jangan sentuh sidebar
     st.markdown(f"""
-    <div class="dm-fab" title="{tip}" onclick="
-        const btns = window.parent.document.querySelectorAll('button');
-        for(const b of btns){{
-            if(b.innerText.trim()==='{icon}'){{b.click();break;}}
-        }}
+    <style>
+    /* Sembunyikan st.button toggle tanpa merusak sidebar/nav */
+    section.main div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"]:has(
+        button[kind="secondary"]
+    ) {{
+        height: 0 !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }}
+    /* Pastikan tombol collapse sidebar tetap berfungsi */
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapseButton"],
+    button[aria-label="Close sidebar"],
+    button[aria-label="Open sidebar"] {{
+        display: flex !important;
+        visibility: visible !important;
+        height: auto !important;
+        overflow: visible !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
+    # FAB yang terlihat — klik trigger st.button via JS
+    st.markdown(f"""
+    <div class="dm-fab" onclick="
+        (function(){{
+            const allBtns = window.parent.document.querySelectorAll('button');
+            for(const b of allBtns){{
+                if(b.innerText.trim()==='{icon}'){{
+                    b.click();
+                    return;
+                }}
+            }}
+        }})();
     ">{icon}</div>
     """, unsafe_allow_html=True)
 
@@ -131,7 +192,10 @@ html, body, [class*="css"], [data-testid="stAppViewContainer"] {{
 }}
 
 /* ── Hide Streamlit chrome ── */
-#MainMenu, footer, header {{ visibility: hidden; }}
+#MainMenu, footer {{ visibility: hidden; }}
+header {{ visibility: hidden; }}
+header [data-testid="stSidebarCollapseButton"],
+header [data-testid="collapsedControl"] {{ visibility: visible !important; display: flex !important; opacity: 1 !important; }}
 .stDeployButton {{ display: none !important; }}
 [data-testid="stToolbar"] {{ display: none !important; }}
 
@@ -147,20 +211,55 @@ html, body, [class*="css"], [data-testid="stAppViewContainer"] {{
     background: {t['bg_side']} !important;
     border-right: 1px solid {t['border']} !important;
 }}
-[data-testid="stSidebar"] * {{
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] div {{
     color: {t['text']} !important;
 }}
+
+/* Nav pages — pastikan tampil dan warna teks kontras */
 [data-testid="stSidebarNav"] {{
-    padding-top: 0.5rem;
+    padding-top: 0.5rem !important;
+    display: block !important;
 }}
-/* Nav link aktif */
+[data-testid="stSidebarNav"] ul {{
+    display: block !important;
+    visibility: visible !important;
+}}
+[data-testid="stSidebarNav"] a {{
+    display: flex !important;
+    visibility: visible !important;
+    color: {t['text']} !important;
+    border-radius: 8px !important;
+    padding: 0.4rem 0.75rem !important;
+    text-decoration: none !important;
+    font-size: 0.875rem !important;
+}}
+[data-testid="stSidebarNav"] a span {{
+    color: {t['text']} !important;
+}}
 [data-testid="stSidebarNav"] a[aria-current="page"] {{
     background: {"rgba(99,102,241,0.15)" if dm else "rgba(99,102,241,0.08)"} !important;
-    border-radius: 8px !important;
+    color: {ACCENT} !important;
+}}
+[data-testid="stSidebarNav"] a[aria-current="page"] span {{
+    color: {ACCENT} !important;
 }}
 [data-testid="stSidebarNav"] a:hover {{
     background: {"rgba(255,255,255,0.05)" if dm else "rgba(0,0,0,0.04)"} !important;
-    border-radius: 8px !important;
+}}
+
+/* Tombol collapse/expand sidebar — jangan disembunyikan */
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseButton"],
+button[aria-label="Close sidebar"],
+button[aria-label="Open sidebar"] {{
+    display: flex !important;
+    visibility: visible !important;
+    height: auto !important;
+    width: auto !important;
+    opacity: 1 !important;
 }}
 
 /* ── Typography ── */
