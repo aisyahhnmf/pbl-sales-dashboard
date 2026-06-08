@@ -1,0 +1,53 @@
+# docker-compose.yml
+services:
+  # ── Container 1: ML Model (Membungkus FastAPI & File .pkl) ──
+  ml_model:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: pbl_ml_model
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+    env_file:
+      - .env
+    volumes:
+      - ./models:/app/models
+    networks:
+      - pbl_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Container 2: Web Dashboard (Membungkus Streamlit) ───────
+  web:
+    build: 
+      context: .
+      dockerfile: Dockerfile.streamlit
+    container_name: pbl_web
+    ports:
+      - "8501:8501"
+    environment:
+      # URL mengarah ke nama service baru: ml_model
+      - API_URL=http://ml_model:8000
+    env_file:
+      - .env
+    networks:
+      - pbl_network
+    depends_on:
+      # Di sini letak error sebelumnya, sekarang sudah diubah ke ml_model
+      ml_model:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  pbl_network:
+    driver: bridge
