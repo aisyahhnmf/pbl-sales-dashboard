@@ -72,13 +72,16 @@ def predict_theta(model_data: dict) -> float:
     description="Prediksi penjualan berdasarkan kategori produk"
 )
 async def predict_sales(data: PredictRequest):
-    if data.category not in VALID_CATEGORIES:
+    # Pengaman Case-Insensitive: Mencocokkan input kategori tanpa memedulikan huruf besar/kecil
+    matched_category = next((c for c in VALID_CATEGORIES if c.lower() == data.category.lower().strip()), None)
+    
+    if not matched_category:
         raise HTTPException(
             status_code=404,
             detail=f"Kategori tidak valid. Pilih salah satu: {VALID_CATEGORIES}"
         )
     try:
-        model_data = load_model_data(data.category)
+        model_data = load_model_data(matched_category)
         model_type = model_data.get('type', 'unknown')
 
         if model_type == 'omp':
@@ -91,7 +94,7 @@ async def predict_sales(data: PredictRequest):
             raise ValueError(f"Tipe model '{model_type}' tidak dikenali")
 
         return PredictResponse(
-            category=data.category,
+            category=matched_category,
             predicted_sales=round(predicted, 2),
             model_used=model_type.upper()
         )
@@ -113,13 +116,16 @@ async def predict_sales(data: PredictRequest):
     description="Ambil hasil forecast per kategori produk"
 )
 async def get_forecast(category: str):
-    if category not in VALID_CATEGORIES:
+    # Pengaman Case-Insensitive: Menghindari error FileNotFoundError akibat perbedaan huruf besar/kecil di Linux Server
+    matched_category = next((c for c in VALID_CATEGORIES if c.lower() == category.lower().strip()), None)
+    
+    if not matched_category:
         raise HTTPException(
             status_code=404,
             detail=f"Kategori tidak valid. Pilih: {VALID_CATEGORIES}"
         )
     try:
-        data             = load_forecast_data(category)
+        data             = load_forecast_data(matched_category)
         forecast_values  = data.get('forecast_values', [])
         periods          = data.get('forecast_periods', [])
         
@@ -142,7 +148,7 @@ async def get_forecast(category: str):
             })
 
         return {
-            "category"     : category,
+            "category"     : matched_category,
             "model_used"   : data.get('type', 'unknown').upper(),
             "total_periods": len(result),
             "forecast"     : result
@@ -165,13 +171,16 @@ async def get_forecast(category: str):
     description="Ambil metrik evaluasi model (MAE, RMSE, MAPE, R2)"
 )
 async def get_metrics(category: str):
-    if category not in VALID_CATEGORIES:
+    # Pengaman Case-Insensitive: Menyamakan pencarian kategori ke load_model_data
+    matched_category = next((c for c in VALID_CATEGORIES if c.lower() == category.lower().strip()), None)
+    
+    if not matched_category:
         raise HTTPException(
             status_code=404,
             detail=f"Kategori tidak valid. Pilih: {VALID_CATEGORIES}"
         )
     try:
-        model_data = load_model_data(category)
+        model_data = load_model_data(matched_category)
         
         # PENGAMAN: Jika dictionary metrik kosong, berikan dictionary kosong berisi pesan dummy
         val_metrics = model_data.get('val_metrics', {})
@@ -183,7 +192,7 @@ async def get_metrics(category: str):
             test_metrics = {"MAE": 0.0, "RMSE": 0.0, "MAPE": 0.0, "R2": 0.0, "info": "Metrik tidak tersedia"}
 
         return {
-            "category"    : category,
+            "category"    : matched_category,
             "model_used"  : model_data.get('type', 'unknown').upper(),
             "params"      : model_data.get('params', {}),
             "val_metrics" : val_metrics,
