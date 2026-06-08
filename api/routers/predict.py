@@ -3,6 +3,10 @@ from fastapi import APIRouter, HTTPException
 from api.ml_loader import load_model_data, load_forecast_data
 from api.schemas import PredictRequest, PredictResponse
 import numpy as np
+import logging
+
+# Inisialisasi logger agar error asli kelihatan di terminal Railway
+logger = logging.getLogger("uvicorn.error")
 
 router = APIRouter(
     prefix="/predict",
@@ -13,21 +17,32 @@ VALID_CATEGORIES = ["Furniture", "Office Supplies", "Technology"]
 
 
 # ════════════════════════════════
-#   LOGIC PREDICT PER MODEL TYPE
+#    LOGIC PREDICT PER MODEL TYPE
 # ════════════════════════════════
 
 def predict_omp(model_data: dict) -> float:
-    """Prediksi untuk Furniture menggunakan OMP"""
-    model_tuple = model_data['model']
-    omp_model   = model_tuple[0]   # OrthogonalMatchingPursuit
-    scaler      = model_tuple[1]   # StandardScaler
-    lag_values  = model_tuple[2]   # array nilai historis
-    n_lags      = model_data['params']['n_lags']
+    """Prediksi untuk Furniture menggunakan OMP dengan pengaman"""
+    try:
+        model_tuple = model_data['model']
+        omp_model   = model_tuple[0]   # OrthogonalMatchingPursuit
+        scaler      = model_tuple[1]   # StandardScaler
+        lag_values  = model_tuple[2]   # array nilai historis
+        
+        # Pengaman jika params atau n_lags tidak ada
+        params = model_data.get('params', {})
+        n_lags = params.get('n_lags', 12) # default 12 jika tidak ada
 
-    last_lags = lag_values[-n_lags:].reshape(1, -1)
-    X_scaled  = scaler.transform(last_lags)
-    result    = omp_model.predict(X_scaled)
-    return float(result[0])
+        # Pengaman jika data historis terlalu pendek
+        if len(lag_values) < n_lags:
+            n_lags = len(lag_values)
+
+        last_lags = lag_values[-n_lags:].reshape(1, -1)
+        X_scaled  = scaler.transform(last_lags)
+        result    = omp_model.predict(X_scaled)
+        return float(result[0])
+    except Exception as e:
+        logger.error(f"Gagal di fungsi predict_omp: {str(e)}", exc_info=True)
+        raise e
 
 
 def predict_arima(model_data: dict) -> float:
@@ -47,7 +62,7 @@ def predict_theta(model_data: dict) -> float:
 
 
 # ════════════════════════════════
-#   ENDPOINT: PREDICT SALES
+#    ENDPOINT: PREDICT SALES
 # ════════════════════════════════
 
 @router.post(
@@ -84,11 +99,12 @@ async def predict_sales(data: PredictRequest):
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        logger.error(f"🚨 Error predict_sales untuk {data.category}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error prediksi: {str(e)}")
 
 
 # ════════════════════════════════
-#   ENDPOINT: FORECAST
+#    ENDPOINT: FORECAST
 # ════════════════════════════════
 
 @router.get(
@@ -104,18 +120,25 @@ async def get_forecast(category: str):
         )
     try:
         data             = load_forecast_data(category)
-        forecast_values  = data['forecast_values']
-        lower            = data['lower']
-        upper            = data['upper']
-        periods          = data['forecast_periods']
+        forecast_values  = data.get('forecast_values', [])
+        periods          = data.get('forecast_periods', [])
+        
+        # PENGAMAN CRITICAL: OMP biasanya tidak punya lower & upper bound.
+        # Jika tidak ada, samakan nilainya dengan forecast_values agar tidak Null/Crash
+        lower            = data.get('lower', forecast_values)
+        upper            = data.get('upper', forecast_values)
 
         result = []
         for i in range(len(forecast_values)):
+            # Ambil nilai batas, berikan fallback nilai asli jika index out of bound
+            lbl = lower[i] if i < len(lower) else forecast_values[i]
+            ubl = upper[i] if i < len(upper) else forecast_values[i]
+
             result.append({
                 "period"        : str(periods[i]),
                 "forecast_sales": round(float(forecast_values[i]), 2),
-                "lower_bound"   : round(float(lower[i]), 2),
-                "upper_bound"   : round(float(upper[i]), 2),
+                "lower_bound"   : round(float(lbl), 2),
+                "upper_bound"   : round(float(ubl), 2),
             })
 
         return {
@@ -128,11 +151,12 @@ async def get_forecast(category: str):
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        logger.error(f"🚨 Error get_forecast untuk {category}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error forecast: {str(e)}")
 
 
 # ════════════════════════════════
-#   ENDPOINT: MODEL METRICS
+#    ENDPOINT: MODEL METRICS
 # ════════════════════════════════
 
 @router.get(
@@ -148,14 +172,25 @@ async def get_metrics(category: str):
         )
     try:
         model_data = load_model_data(category)
+        
+        # PENGAMAN: Jika dictionary metrik kosong, berikan dictionary kosong berisi pesan dummy
+        val_metrics = model_data.get('val_metrics', {})
+        if not val_metrics:
+            val_metrics = {"MAE": 0.0, "RMSE": 0.0, "MAPE": 0.0, "R2": 0.0, "info": "Metrik tidak tersedia"}
+
+        test_metrics = model_data.get('test_metrics', {})
+        if not test_metrics:
+            test_metrics = {"MAE": 0.0, "RMSE": 0.0, "MAPE": 0.0, "R2": 0.0, "info": "Metrik tidak tersedia"}
+
         return {
             "category"    : category,
             "model_used"  : model_data.get('type', 'unknown').upper(),
             "params"      : model_data.get('params', {}),
-            "val_metrics" : model_data.get('val_metrics', {}),
-            "test_metrics": model_data.get('test_metrics', {})
+            "val_metrics" : val_metrics,
+            "test_metrics": test_metrics
         }
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        logger.error(f"🚨 Error get_metrics untuk {category}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error metrics: {str(e)}")
